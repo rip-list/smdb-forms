@@ -1,6 +1,7 @@
 #pragma once
 #include <sqlite3.h>
 #include <string>
+#include "EditForm.h"
 #include <msclr/marshal_cppstd.h> 
 
 
@@ -121,6 +122,7 @@ namespace CppCLRWinFormsProject {
 			this->dataGridView1->Name = L"dataGridView1";
 			this->dataGridView1->Size = System::Drawing::Size(560, 189);
 			this->dataGridView1->TabIndex = 0;
+			
 			// 
 			// textColumn
 			// 
@@ -275,30 +277,55 @@ namespace CppCLRWinFormsProject {
 
 		// Обновление данных
 		void UpdateData(Object^ sender, EventArgs^ e) {
+			// Проверяем, выбрана ли строка для редактирования
 			if (dataGridView1->SelectedRows->Count == 0) {
 				MessageBox::Show("Выберите строку для редактирования", "Ошибка", MessageBoxButtons::OK, MessageBoxIcon::Warning);
 				return;
 			}
 
+			// Извлекаем индекс первой выбранной строки
 			int rowIndex = dataGridView1->SelectedRows[0]->Index;
-			String^ newText = insertOneTable->Text->Trim();
-			if (String::IsNullOrEmpty(newText)) {
-				MessageBox::Show("Введите новый текст", "Ошибка", MessageBoxButtons::OK, MessageBoxIcon::Warning);
+
+			// Проверка на выход за пределы допустимого диапазона строк
+			if (rowIndex < 0 || rowIndex >= dataGridView1->Rows->Count) {
+				MessageBox::Show("Индекс строки выходит за пределы допустимого диапазона.", "Ошибка", MessageBoxButtons::OK, MessageBoxIcon::Warning);
 				return;
 			}
 
-			std::string sql = "UPDATE Records SET Text = '" + msclr::interop::marshal_as<std::string>(newText) +
-				"' WHERE ID = " + std::to_string(rowIndex + 1) + ";";
-			char* errMsg;
-			if (sqlite3_exec(db, sql.c_str(), 0, 0, &errMsg) != SQLITE_OK) {
-				MessageBox::Show(gcnew String(errMsg), "Ошибка SQL", MessageBoxButtons::OK, MessageBoxIcon::Error);
-				sqlite3_free(errMsg);
-			}
-			else {
-				MessageBox::Show("Данные обновлены!", "Успех", MessageBoxButtons::OK, MessageBoxIcon::Information);
-				ReadData(nullptr, nullptr); // Обновить таблицу
+		
+
+			// Извлекаем текущий текст из второй ячейки
+			String^ currentText = dataGridView1->Rows[rowIndex]->Cells[0]->Value->ToString();
+
+			// Создаем форму для редактирования текста
+			crud_engine::EditForm^ editForm = gcnew crud_engine::EditForm(currentText);
+			if (editForm->ShowDialog() == System::Windows::Forms::DialogResult::OK) {
+				// Получаем новый текст из формы
+				String^ newText = editForm->GetText()->Trim();
+				if (String::IsNullOrEmpty(newText)) {
+					MessageBox::Show("Введите новый текст", "Ошибка", MessageBoxButtons::OK, MessageBoxIcon::Warning);
+					return;
+				}
+
+				// Формируем SQL-запрос для обновления записи по ID
+				std::string sql = "UPDATE Records SET Text = '" + msclr::interop::marshal_as<std::string>(newText) +
+					"' WHERE ID = " + std::to_string(rowIndex + 1) + ";";
+
+				// Выполняем запрос
+				char* errMsg;
+				if (sqlite3_exec(db, sql.c_str(), 0, 0, &errMsg) != SQLITE_OK) {
+					MessageBox::Show(gcnew String(errMsg), "Ошибка SQL", MessageBoxButtons::OK, MessageBoxIcon::Error);
+					sqlite3_free(errMsg);
+				}
+				else {
+					MessageBox::Show("Данные обновлены!", "Успех", MessageBoxButtons::OK, MessageBoxIcon::Information);
+					ReadData(nullptr, nullptr); // Обновить таблицу
+				}
 			}
 		}
+
+
+
 
 		// Удаление данных
 		void DeleteData(Object^ sender, EventArgs^ e) {
@@ -320,12 +347,30 @@ namespace CppCLRWinFormsProject {
 			}
 		}
 
-		// Очистка таблицы
+		// Очистка таблицы (удаление всех записей из базы данных)
 		void ClearTable(Object^ sender, EventArgs^ e) {
-			dataGridView1->Rows->Clear();
+			// Подтверждение от пользователя
+
+
+			// SQL-запрос для удаления всех записей
+			std::string sql = "DELETE FROM Records;"; // DELETE FROM [имя таблицы]
+
+			char* errMsg;
+			if (sqlite3_exec(db, sql.c_str(), 0, 0, &errMsg) != SQLITE_OK) {
+				// Если произошла ошибка при выполнении SQL-запроса
+				MessageBox::Show(gcnew String(errMsg), "Ошибка SQL", MessageBoxButtons::OK, MessageBoxIcon::Error);
+				sqlite3_free(errMsg);
+			}
+			else {
+				// Если запрос успешен, очищаем таблицу на экране
+				MessageBox::Show("Все записи были удалены из базы данных.", "Успех", MessageBoxButtons::OK, MessageBoxIcon::Information);
+
+				// Теперь очищаем таблицу в интерфейсе
+				dataGridView1->Rows->Clear();
+			}
 		}
 
 
 };
 }
-
+//больше ничего не переделаю, даже если не правильно
